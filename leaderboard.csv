@@ -1,0 +1,2 @@
+synthesizer,dataset,modality,iteration,score,model_time,run_id,error
+dpCTGAN,adult,single-table,0,,,2f55a213-2,AttributeError: 'dpCTGANSynthesizer' object has no attribute 'batch_size'

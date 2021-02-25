@@ -1,0 +1,475 @@
+{
+    "columns": [
+        {
+            "max": 3858.0,
+            "min": 1859.0,
+            "name": "Elevation",
+            "type": "continuous"
+        },
+        {
+            "max": 360.0,
+            "min": 0.0,
+            "name": "Aspect",
+            "type": "continuous"
+        },
+        {
+            "max": 66.0,
+            "min": 0.0,
+            "name": "Slope",
+            "type": "continuous"
+        },
+        {
+            "max": 1397.0,
+            "min": 0.0,
+            "name": "Horizontal_Distance_To_Hydrology",
+            "type": "continuous"
+        },
+        {
+            "max": 601.0,
+            "min": -173.0,
+            "name": "Vertical_Distance_To_Hydrology",
+            "type": "continuous"
+        },
+        {
+            "max": 7117.0,
+            "min": 0.0,
+            "name": "Horizontal_Distance_To_Roadways",
+            "type": "continuous"
+        },
+        {
+            "max": 254.0,
+            "min": 0.0,
+            "name": "Hillshade_9am",
+            "type": "continuous"
+        },
+        {
+            "max": 254.0,
+            "min": 0.0,
+            "name": "Hillshade_Noon",
+            "type": "continuous"
+        },
+        {
+            "max": 254.0,
+            "min": 0.0,
+            "name": "Hillshade_3pm",
+            "type": "continuous"
+        },
+        {
+            "max": 7173.0,
+            "min": 0.0,
+            "name": "Horizontal_Distance_To_Fire_Points",
+            "type": "continuous"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Wilderness_Area_0",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Wilderness_Area_1",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Wilderness_Area_2",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Wilderness_Area_3",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type0",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type1",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type2",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type3",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type4",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type5",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type6",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type7",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type8",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type9",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type10",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type11",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type12",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type13",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type14",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type15",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type16",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type17",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type18",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type19",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type20",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type21",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type22",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type23",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type24",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type25",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type26",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type27",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type28",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type29",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type30",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type31",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type32",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type33",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type34",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type35",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type36",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type37",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type38",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "0",
+                "1"
+            ],
+            "name": "Soil_Type39",
+            "size": 2,
+            "type": "categorical"
+        },
+        {
+            "i2s": [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7"
+            ],
+            "name": "label",
+            "size": 7,
+            "type": "categorical"
+        }
+    ],
+    "problem_type": "multiclass_classification"
+}
