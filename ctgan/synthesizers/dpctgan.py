@@ -145,7 +145,7 @@ def get_occurences_counts(data, add_noise=False, std=2):
         for feature in data.head():
             #print(list(counts[feature].items()))
             for key, row in counts[feature].iteritems():
-                counts[feature][key] = row + random.normal(loc=10, scale=std) #Random values here for now, just making sure we won't go into the negatives
+                counts[feature][key] = max(0, row + random.normal(loc=1, scale=std)) #Add noise and make sure we won't go into the negatives
     return counts
 
 def get_entanglements(occurs, l_threshold):
