@@ -5,7 +5,7 @@ from ctgan.synthesizers.tvae import TVAESynthesizer
 __all__ = (
     'dpCTGANSynthesizer',
 	'CTGANSynthesizer',
-    'TVAESynthesizer'
+    'TVAESynthesizer' 
 )
 
 

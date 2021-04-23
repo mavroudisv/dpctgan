@@ -75,14 +75,13 @@ class CUDATabular(SDVTabular):
         return model.sample()
 
 
-class dpCTGAN(CUDATabular):
-
-    _MODEL = sdv.tabular.dpCTGAN
-
-
 class CTGAN(CUDATabular):
 
     _MODEL = sdv.tabular.CTGAN
+
+class dpCTGAN(CUDATabular):
+
+    _MODEL = sdv.tabular.dpCTGAN
 
 
 class TVAE(CUDATabular):

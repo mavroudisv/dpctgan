@@ -153,7 +153,7 @@ class DataSampler(object):
             idx.append(np.random.choice(self._rid_by_cat_cols[c][o]))
         return self._data[idx]
     
-    def sample_data_quantum(self, n, col, opt, value_maps_id, occurs):
+    def sample_data_quantum(self, n, col, opt, value_maps_id):
         """Sample data from original training data satisfying the sampled conditional vector.
 
         Returns:
@@ -170,14 +170,16 @@ class DataSampler(object):
         for c, o in zip(col, opt):            
             #print("-----------\n", "c", c, "o", o)
 
-            #Get the other values that are entagled with c,o
-            values, freqs = zip(*value_maps_id[c][o])
-            
+            if c in value_maps_id: #Discrete features
+                #Get the other values that are entagled with c,o
+                values, freqs = zip(*value_maps_id[c][o])
+            else: #Continuous features
+                values = (c,o)
+                
             sampling_pool = []
             for v in values: #The sampling pool contains all the samples with value either o or a value entangled with o
                 sampling_pool.extend(self._rid_by_cat_cols[c][v]) # _rid_by_cat_cols[c][v] is a list of all rows with the c-th discrete column equal value v.
                 
-            
             tmp_sample_idx = np.random.choice(sampling_pool) # Pick one sample from the pool of ids
             tmp_sample = self._data[tmp_sample_idx] #Get the sample corresponding to that id
             

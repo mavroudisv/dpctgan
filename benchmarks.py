@@ -36,11 +36,11 @@ all_synthesizers = [
 ]
 
 all_datasets = [
-    #"adult",
+    "adult",
     #"alarm",
-    #"asia",
+    #"asia",  #all features are discrete
     #"census",
-    "child",
+    #"child",
     #"covtype",
     #"credit",
     #"grid",
@@ -55,7 +55,7 @@ all_datasets = [
 
 scores = sdgym.run(synthesizers=all_synthesizers, 
                     datasets=all_datasets,
-					show_progress=True,
+					show_progress=False,
                     #output_path="/SAN/infosec/TLS_fingerprinting/experiments/SDGym/leaderboard.csv",
                     iterations=1)
 print("Scores", scores)

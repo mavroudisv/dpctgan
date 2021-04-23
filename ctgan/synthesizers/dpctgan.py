@@ -8,28 +8,44 @@ from torch import optim
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential, functional
 
 from ctgan.data_sampler import DataSampler
-from ctgan.data_transformer import DataTransformer
+from ctgan.data_transformer_dp import DataTransformerDP
 from ctgan.synthesizers.base import BaseSynthesizer
 
 ###### Privacy ###### 
 import opacus
 from opacus import PrivacyEngine
 from opacus.utils.module_modification import convert_batchnorm_modules
-from numpy import random
 
 
-PRIVACY_DISCRIMINATOR = False
-PRIVACY_QUANTUM   = False
+
+PRIVACY_DISCRIMINATOR = True
+PRIVACY_QUANTUM   = True
+GRADIENT_PENALTY = False
+
+
+
 ALPHAS            = ([1.25, 1.5, 1.75, 2., 2.25, 2.5, 3., 3.5, 4., 4.5] + list(range(5, 64)) + [128, 256, 512])
 NOISE_MULTIPLIER  = 1.1
 MAX_GRAD_NORM     = 1.0
 TARGET_DELTA      = -1
 BUDGET            = 3
 
-NOISY_OCCURENCES  = True
-L_THRESHOLD       = 500
+#Discrete
+NOISY_OCCURENCES_D  = True
+NOISE_D_STD         = 2
+NOISE_D_MEAN        = 10
+L_THRESHOLD_D       = 10
+
+#Continuous
+NOISY_OCCURENCES_C  = True
+NOISE_C_STD         = 2
+NOISE_C_MEAN        = 10
+L_THRESHOLD_C       = 7000
+COMPONENTS_C        = 3
+SYNTHETIC_STD       = 9
 ###### Privacy ###### 
 
+'''
 # custom for calcuate grad_sample for multiple loss.backward()
 def _custom_create_or_extend_grad_sample(param: torch.Tensor, grad_sample: torch.Tensor, batch_dim: int) -> None:
     """
@@ -46,6 +62,19 @@ def _custom_create_or_extend_grad_sample(param: torch.Tensor, grad_sample: torch
         param.grad_sample = grad_sample
 
 #opacus.supported_layers_grad_samplers._create_or_extend_grad_sample = (_custom_create_or_extend_grad_sample)
+'''
+
+# custom weights initialization called on netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find("Conv") != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find("BatchNorm") != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+    elif classname.find("Linear") != -1:
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
 
 class Discriminator(Module):
 
@@ -61,28 +90,34 @@ class Discriminator(Module):
 
         seq += [Linear(dim, 1)]
         self.seq = Sequential(*seq)
+        #self.requires_grad_(requires_grad=False)
 
+    
     def calc_gradient_penalty(self, real_data, fake_data, device, pac=10, lambda_=10):
         alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
         alpha = alpha.repeat(1, pac, real_data.size(1))
         alpha = alpha.view(-1, real_data.size(1))
+        
 
         interpolates = alpha * real_data + ((1 - alpha) * fake_data)
 
         disc_interpolates = self(interpolates)
 
+        
         gradients = torch.autograd.grad(
             outputs=disc_interpolates, inputs=interpolates,
             grad_outputs=torch.ones(disc_interpolates.size(), device=device),
             create_graph=True, retain_graph=True, only_inputs=True
         )[0]
-
-        gradient_penalty = ((
-            gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1
-        ) ** 2).mean() * lambda_
-
+        
+        gradients = gradients.view(-1, pac * real_data.size(1))
+        gradients_norm = torch.sqrt(torch.sum(gradients ** 2, dim=1) + 1e-12)
+        gradient_penalty =  lambda_ * ((gradients_norm - 1) ** 2).mean()
+        
         return gradient_penalty
-
+        
+       
+    
     def forward(self, input):
         assert input.size()[0] % self.pack == 0
         return self.seq(input.view(-1, self.packdim))
@@ -120,89 +155,7 @@ class Generator(Module):
         return data
 
 
-##### Privacy ######
-# custom weights initialization called on netD
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find("Conv") != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find("BatchNorm") != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
-    elif classname.find("Linear") != -1:
-        torch.nn.init.xavier_uniform(m.weight)
-        m.bias.data.fill_(0.01)
 
-def get_occurences_counts(data, add_noise=False, std=2):
-    counts = {}
-    
-    # Get counts
-    for feature in data.head():
-        counts[feature] = data[feature].value_counts()
-
-    # Make them noisy counts
-    if add_noise:
-        for feature in data.head():
-            #print(list(counts[feature].items()))
-            for key, row in counts[feature].iteritems():
-                counts[feature][key] = max(0, row + random.normal(loc=1, scale=std)) #Add noise and make sure we won't go into the negatives
-    return counts
-
-def get_entanglements(occurs, l_threshold):
-    value_maps = {}
-    for feature in occurs.keys():
-        value_maps[feature] = get_entanglements_feature(occurs[feature], l_threshold)
-    return value_maps
-    
-def get_entanglements_feature(occurs, l_threshold):
-    values_above = []
-    values_below = []
-    
-    #Get values below L
-    for label, count in occurs.iteritems():
-        #print(label, count)
-        if count > l_threshold:
-            values_above.append((label, count))
-        else:
-            values_below.append((label, count))
-
-    
-    ## Sort based on occurences
-    values_below = sorted(values_below, key=lambda tup: tup[1], reverse=True)
-    values_above = sorted(values_above, key=lambda tup: tup[1], reverse=True)
-
-    feature_map = {} # Map of the superpositions
-    for index, _ in enumerate(values_above):
-        above_tuple = values_above[index]
-        position = [(above_tuple[0], 1)]
-        feature_map[above_tuple[0]] = position
-    
-    
-    # Entangle some of the "above" values with some values with occurences "below" the threshold    
-    ## Todo: This insanely simple "algorithm" assumes that we have more values above the threshold than below.
-    ## Come up with a nice, generic algorithm for deciding what to merge
-    for index, _ in enumerate(values_below):
-        above_tuple = values_above[index]
-        below_tuple = values_below[index]
-        
-        count_sum = above_tuple[1] + below_tuple[1]
-        ratio_above = above_tuple[1] / count_sum
-        ratio_below = below_tuple[1] / count_sum
-        
-        superposition = [(above_tuple[0], ratio_above), (below_tuple[0], ratio_below)]
-        feature_map[above_tuple[0]] = superposition
-        feature_map[below_tuple[0]] = superposition
-    
-    return feature_map
- 
-def convert_names_to_ids(transf, value_maps):
-    value_maps_id = {}
-    for feature in value_maps.keys():
-        info = transf.convert_column_name_to_id(feature)
-        id = info['column_id']
-        value_maps_id[id] = value_maps[feature]
-    return value_maps_id
- 
 '''   
 def entangle_n_collapse_superpositions(data, mapping, condvec): #Warning: it needs to entangle only the condvec feature/values
     for feature in data.head():
@@ -288,9 +241,6 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         self.max_grad_norm = MAX_GRAD_NORM
         self.target_delta = TARGET_DELTA
         self.budget = BUDGET
-        self.occurences = {}
-        self.value_maps = {}
-        self.value_maps_id = {}
         ###### Privacy ###### 
     
     def _init_dp_engine(self, model, batch_size, sample_size):
@@ -300,7 +250,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
             sample_size = sample_size,
             alphas=self.alphas,
             noise_multiplier=self.noise_multiplier,
-            clip_per_layer=True,
+            #clip_per_layer=True,
             max_grad_norm=self.max_grad_norm,
         )
 
@@ -428,23 +378,22 @@ class dpCTGANSynthesizer(BaseSynthesizer):
                  'in a future version. Please pass `epochs` to the constructor instead'),
                 DeprecationWarning
             )
-        
-        #### Privacy ####
-        if PRIVACY_QUANTUM:		
-            self.occurences = get_occurences_counts(train_data, NOISY_OCCURENCES) # Count occurences
-            self.value_maps = get_entanglements(self.occurences, L_THRESHOLD) # Decide on entanglements       
-        #### Privacy ####
-        
-        self._transformer = DataTransformer()
+
+        self._transformer = DataTransformerDP(
+                    privacy_quantum=PRIVACY_QUANTUM, 
+                    noisy_occurences_d=NOISY_OCCURENCES_D, 
+                    noise_d_mean=NOISE_D_MEAN,
+                    noise_d_std=NOISE_D_STD,
+                    l_threshold_d=L_THRESHOLD_D,
+                    noisy_occurences_c=NOISY_OCCURENCES_C, 
+                    noise_c_mean=NOISE_C_MEAN,
+                    noise_c_std=NOISE_C_STD,
+                    l_threshold_c=L_THRESHOLD_C,
+                    components_c=COMPONENTS_C,
+                    synthetic_std=SYNTHETIC_STD
+                    )
         self._transformer.fit(train_data, discrete_columns)
-
         train_data = self._transformer.transform(train_data)
-
-        #### Privacy ####
-        if PRIVACY_QUANTUM:		
-            self.value_maps_id = convert_names_to_ids(self._transformer, self.value_maps) # Move from "labels" to "column ids"
-        #### Privacy ####
-     
 
 
         self._data_sampler = DataSampler(
@@ -480,8 +429,8 @@ class dpCTGANSynthesizer(BaseSynthesizer):
             if self.target_delta==-1:
                 self.target_delta = 1/len(train_data)
 
-            self._discriminator = convert_batchnorm_modules(self._discriminator).to(self.device)
-            self._discriminator.apply(weights_init)
+            #self._discriminator = convert_batchnorm_modules(self._discriminator).to(self.device)
+            #self._discriminator.apply(weights_init)
             self.engine = self._init_dp_engine(self._discriminator, self._batch_size, len(train_data))
             self.engine.attach(self._optimizerD)
             #opacus.autograd_grad_sample.disable_hooks()
@@ -497,15 +446,12 @@ class dpCTGANSynthesizer(BaseSynthesizer):
 
                 for n in range(self._discriminator_steps):
                     
-                    #if PRIVACY_DISCRIMINATOR:  ##### Privacy
-                    #    opacus.autograd_grad_sample.disable_hooks()  ##### Privacy
-                    
                     fakez = torch.normal(mean=mean, std=std)
 
-                    condvec = self._data_sampler.sample_condvec(self._batch_size) #This is used to sample real data, yes privacy
+                    condvec = self._data_sampler.sample_condvec(self._batch_size) #This is used to sample real data, yes privacy !!! It returns discrete_column_ids, "discrete"!!!
                     #cond, mask, discrete_column_id, category_id_in_col
                     #c1,    m1,  col,                opt = condvec
-                    condvec = self._data_sampler.sample_condvec(self._batch_size)
+                    #condvec = self._data_sampler.sample_condvec(self._batch_size)
                     if condvec is None:
                         c1, m1, col, opt = None, None, None, None
                         real = self._data_sampler.sample_data(self._batch_size, col, opt)
@@ -518,7 +464,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
                         perm = np.arange(self._batch_size)
                         np.random.shuffle(perm)
                         if PRIVACY_QUANTUM:
-                            real = self._data_sampler.sample_data_quantum(self._batch_size, col[perm], opt[perm], self.value_maps_id, self.occurences)
+                            real = self._data_sampler.sample_data_quantum(self._batch_size, col[perm], opt[perm], self._transformer.value_maps_id)
                         else:    
                             real = self._data_sampler.sample_data(self._batch_size, col[perm], opt[perm])
                         c2 = c1[perm]
@@ -540,19 +486,17 @@ class dpCTGANSynthesizer(BaseSynthesizer):
                     y_fake = self._discriminator(fake_cat)
                     y_real = self._discriminator(real_cat)
 
+
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
-                    pen = self._discriminator.calc_gradient_penalty(real_cat, fake_cat, self._device)
                     
-                    #print("-"*30, flush=True)
-                    #self._optimizerD.zero_grad()
-                    pen.backward(retain_graph=True)
-                    #self._optimizerD.virtual_step()                    
+                    if GRADIENT_PENALTY:
+                        pen = self._discriminator.calc_gradient_penalty(real_cat, fake_cat, self._device)
+
+                    self._optimizerD.zero_grad()
+                    if GRADIENT_PENALTY:
+                        pen.backward(retain_graph=True)
                     loss_d.backward()                    
-                    self._optimizerD.step()                    
-                    #self._optimizerD.zero_grad()
-                    #print("+"*30, flush=True)
-                    #if PRIVACY_DISCRIMINATOR:  ##### Privacy
-                    #    opacus.autograd_grad_sample.disable_hooks() ##### Privacy
+                    self._optimizerD.step()
 
 
                 fakez = torch.normal(mean=mean, std=std)
