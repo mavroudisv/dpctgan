@@ -366,46 +366,39 @@ class DataTransformerDP(object):
         tmp_counts = [] #Only above the threshold counts here, but may change over time
         tmp_below_neighbours_idx = []
         for i in range(len(means_unsafe)):
+            # We keep a list of underrepresented means and merge them as soon as one with sufficient count comes along
             
-            if counts_per_component[i] >= self.l_threshold_c and tmp_below_neighbours_idx == []:                                  #Mean `i` is safe, and there is nothing to merge
+            if counts_per_component[i] >= self.l_threshold_c: #Mean `i` is safe, so we can add it; let's see whether there is something to merge next
                 tmp_means.append(means_unsafe[i])
                 tmp_counts.append(counts_per_component[i])
                 component_mapping[i] = len(tmp_means)-1 #Keep track of the mapping between the old means and the new ones
            
-            elif counts_per_component[i] >= self.l_threshold_c  and tmp_below_neighbours_idx != []: #There are means that couldn't be combined to make it above the threshold
-                tmp_means.append(means_unsafe[i])
-                tmp_counts.append(counts_per_component[i])
-                component_mapping[i] = len(tmp_means)-1 #Keep track of the mapping between the old means and the new ones
+                if tmp_below_neighbours_idx != []: #There are means that couldn't be combined to make it above the threshold
+                    #Merge the elements of `tmp_below_neighbours_idx` with whichever safe neighbour their are closer to
+                    while tmp_below_neighbours_idx != []:
+                        idx = tmp_below_neighbours_idx.pop()
+                        tmp_mean = means_unsafe[idx]
+                        tmp_count = counts_per_component[idx]
+
+                        #Determine the ID of the closest mean value to merge with
+                        merge_with_id = 0 
+                        if len(tmp_means) > 1: #There is more than one option, so let's select the best one
+                            dist_down = abs(tmp_means[-2] - tmp_mean) # mean for merging down
+                            dist_up = abs(tmp_means[-1] - tmp_mean) # mean for merging up
+                            
+                            if dist_down > dist_up: # if our current mean is closer than the previous (safe) mean we merge up!
+                                merge_with_id = len(tmp_means)-1
+                            else: # if the previous (safe) mean was closer we merge down
+                                merge_with_id = len(tmp_means)-2
+                                
+                        # We compute the new mean as the weighted average between its previous value and the mean we merged with it
+                        (tmp_mean, tmp_count) = self._merge_values([tmp_mean, tmp_means[merge_with_id]], [tmp_count, tmp_counts[merge_with_id]])    
+                        tmp_means[merge_with_id] = tmp_mean
+                        tmp_counts[merge_with_id] = tmp_count
+
+                        component_mapping[idx] = merge_with_id #Keep track of the mapping between the old means and the new ones
                 
-                #Merge the elements of `tmp_below_neighbours_idx` with whichever safe neighbour their are closer to
-                while tmp_below_neighbours_idx != []:
-                    idx = tmp_below_neighbours_idx.pop()
-                    tmp_mean = means_unsafe[idx]
-                    tmp_count = counts_per_component[idx]
-                    
-                    #Determine which is the closest mean value to merge with
-                    merge_up = False
-                    if len(tmp_means) == 1: #There is no down to merge with
-                        merge_up = True                    
-                    else: 
-                        dist_down = abs(tmp_means[-2] - tmp_mean)
-                        dist_up = abs(tmp_means[-1] - tmp_mean)
-                        if dist_down > dist_up:
-                            merge_up = True                    
-                    
-                    if not merge_up:
-                        (tmp_mean, tmp_count) = self._merge_values([tmp_mean, tmp_means[-2]], [tmp_count, tmp_counts[-2]])    
-                        tmp_means[-2] = tmp_mean
-                        tmp_counts[-2] = tmp_count
-                        
-                        component_mapping[idx] = len(tmp_means)-2 #Keep track of the mapping between the old means and the new ones
-                    else:
-                        (tmp_mean, tmp_count) = self._merge_values([tmp_mean, tmp_means[-1]], [tmp_count, tmp_counts[-1]])    
-                        tmp_means[-1] = tmp_mean
-                        tmp_counts[-1] = tmp_count                    
-                        component_mapping[idx] = len(tmp_means)-1 #Keep track of the mapping between the old means and the new ones
-                
-            elif counts_per_component[i] < self.l_threshold_c:
+            else :  # counts_per_component[i] < self.l_threshold_c:
                 tmp_below_neighbours_idx.append(i) #Keep pointer to unsafe means
 
                 #Check the merge candidates list
@@ -413,7 +406,7 @@ class DataTransformerDP(object):
                 neighbour_counts =[counts_per_component[n] for n in tmp_below_neighbours_idx] 
                 (neighbour_mean, neighbour_count) = self._merge_values(neighbour_means, neighbour_counts)
                 
-                if neighbour_mean >= self.l_threshold_c: #We found a combination of "below" means that works
+                if neighbour_counts >= self.l_threshold_c: #We found a combination of "below" means that works
                     tmp_means.append(neighbour_mean)
                     tmp_counts.append(neighbour_count)
                     
@@ -421,7 +414,7 @@ class DataTransformerDP(object):
                         component_mapping[idx] = len(tmp_means)-1 
                     tmp_below_neighbours_idx = [] #Flush list
                     
-                elif neighbour_mean < self.l_threshold_c and i == len(means_unsafe)-1: #If we are in the last element of the `means_unsafe`, merge with the last mean that was above the threshold
+                elif neighbour_counts < self.l_threshold_c and i == len(means_unsafe)-1: #If we are in the last element of the `means_unsafe`, merge with the last mean that was above the threshold
                     assert last_merge == False #Should get here only once!
                     last_merge = True
                     
