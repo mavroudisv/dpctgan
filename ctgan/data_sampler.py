@@ -8,11 +8,15 @@ class DataSampler(object):
         self._data = data
 
         def is_discrete_column(column_info):
-            return (len(column_info) == 1
-                    and column_info[0].activation_fn == "softmax")
+            if (len(column_info) == 1 and column_info[0].activation_fn == "softmax"): #Real discrete
+                return True
+            #elif (len(column_info) >= 1 and column_info[1].activation_fn == "softmax"): #Discretized
+            #    return True
+            else:
+                return False
+            #return (len(column_info) == 1 and column_info[0].activation_fn == "softmax")
 
-        n_discrete_columns = sum(
-            [1 for column_info in output_info if is_discrete_column(column_info)])
+        n_discrete_columns = sum([1 for column_info in output_info if is_discrete_column(column_info)])
 
         self._discrete_column_matrix_st = np.zeros(n_discrete_columns, dtype="int32")
 
@@ -20,8 +24,8 @@ class DataSampler(object):
         # For example _rid_by_cat_cols[a][b] is a list of all rows with the
         # a-th discrete column equal value b.
         self._rid_by_cat_cols = []
-        import sys
-        np.set_printoptions(threshold=sys.maxsize)
+        #import sys
+        #np.set_printoptions(threshold=sys.maxsize)
     
         # Compute _rid_by_cat_cols
         discrete_ind = 0
@@ -30,7 +34,7 @@ class DataSampler(object):
             if is_discrete_column(column_info):
                 
                 
-                self._discrete_column_matrix_st[discrete_ind] = st #Map feautre-columns to their one hot encoding
+                self._discrete_column_matrix_st[discrete_ind] = st #Map feature-columns to their one hot encoding
                 #print(discrete_ind, self._discrete_column_matrix_st[discrete_ind])
                 discrete_ind += 1                
                 
@@ -55,10 +59,8 @@ class DataSampler(object):
              if is_discrete_column(column_info)], default=0)
 
         self._discrete_column_cond_st = np.zeros(n_discrete_columns, dtype='int32')
-        self._discrete_column_n_category = np.zeros(
-            n_discrete_columns, dtype='int32')
-        self._discrete_column_category_prob = np.zeros(
-            (n_discrete_columns, max_category))
+        self._discrete_column_n_category = np.zeros(n_discrete_columns, dtype='int32')
+        self._discrete_column_category_prob = np.zeros((n_discrete_columns, max_category))
         self._n_discrete_columns = n_discrete_columns
         self._n_categories = sum(
             [column_info[0].dim for column_info in output_info
@@ -174,8 +176,11 @@ class DataSampler(object):
             
             if c in value_maps_id: #Discrete features
                 #Get the other values that are entagled with c,o
+                #print("discrete")
                 values, freqs = zip(*value_maps_id[c][o])
-
+            else: #Continuous features
+                print("continuous")
+                values = (c,o)
                 
             sampling_pool = []
             for v in values: #The sampling pool contains all the samples with value either o or a value entangled with o
@@ -199,7 +204,7 @@ class DataSampler(object):
             for v in values:
                 tmp_sample[st+v] = 0.0
 
-            values, freqs = zip(*value_maps_id[c][o])
+            #values, freqs = zip(*value_maps_id[c][o])
             val = np.random.choice(values, p=freqs)
             tmp_sample[st+val] = 1.0
 

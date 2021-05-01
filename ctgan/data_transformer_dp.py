@@ -126,7 +126,7 @@ def convert_names_to_ids(transf, value_maps):
     value_maps_id = {}
     for name in value_maps.keys():
         info = transf.convert_column_name_to_id(name)
-        id = info['discrete_column_id'] #It's a bit surprising but the sampler prefers discrete_column_ids instead of generic column_ids
+        id = info['discrete_column_id'] #self._data_sampler.sample_condvec uses `discrete_column_id` 
         value_maps_id[id] = value_maps[name]
     return value_maps_id
 #### Privacy #### 
