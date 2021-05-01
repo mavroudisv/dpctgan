@@ -226,7 +226,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         self._discriminator_lr = discriminator_lr
         self._discriminator_decay = discriminator_decay
 
-        self._batch_size = batch_size
+        self._batch_size = 1
         self._discriminator_steps = discriminator_steps
         self._log_frequency = log_frequency
         self._verbose = verbose
