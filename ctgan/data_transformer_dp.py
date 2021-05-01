@@ -182,7 +182,10 @@ class DataTransformerDP(object):
         self.l_threshold_c = l_threshold_c
         self.components_c = components_c
         self.synthetic_std = synthetic_std
-        self.components_c_merged = -1 # Is determined later
+        self.component_mapping = {}
+        self.components_c_merged = {} # 
+        self.means_safe = {} #Dict of lists
+        self.stds_safe = {} #Dict of lists
         #### Privacy ####
         
 
@@ -210,7 +213,6 @@ class DataTransformerDP(object):
         """Train GMM for continuous column."""      
         raw_column_data = column_data.values
                 
-      
         assert raw_column_data.shape[0] > self.l_threshold_c #The total number of samples is less than the privacy threshold! Consider needing less privacy or gather more data.
         gm = GaussianMixture(self.components_c)
         gm.fit(raw_column_data.reshape(-1, 1))
@@ -250,105 +252,28 @@ class DataTransformerDP(object):
             output_dimensions=num_categories
             )
 
-
-    def fit(self, raw_data, discrete_columns=tuple()):
-        """Fit GMM for continuous columns and One hot encoder for discrete columns.
-        This step also counts the #columns in matrix data, and span information.
-        """
-  
-        self.output_info_list = []
-        self.output_dimensions = 0
-
-        if not isinstance(raw_data, pd.DataFrame):
-            self.dataframe = False
-            raw_data = pd.DataFrame(raw_data)
-        else:
-            self.dataframe = True
-
-        self._column_raw_dtypes = raw_data.infer_objects().dtypes
-        self._column_transform_info_list = []
-  
-        
-        for column_name in raw_data.columns:
-            #raw_column_data = raw_data[column_name].values #CTGAN
-            column_data = raw_data[column_name]  #DPCTGAN
-            if column_name in discrete_columns:
-                column_transform_info = self._fit_discrete(column_name, column_data)
-            else:
-                if self.privacy_quantum:
-                    column_transform_info = self._fit_continuous_privacy(column_name, column_data) #### Privacy
-                else:    
-                    column_transform_info = self._fit_continuous(column_name, column_data)
-
-            self.output_info_list.append(column_transform_info.output_info)
-            self.output_dimensions += column_transform_info.output_dimensions
-            self._column_transform_info_list.append(column_transform_info)
-          
-        #### Privacy ####
-        if self.privacy_quantum:		
-            self.value_maps_id = convert_names_to_ids(self, self.value_maps) # Move from "labels" to "column ids"
-        #### Privacy ####
-
-    def _transform_continuous(self, column_transform_info, raw_column_data):
-        gm = column_transform_info.transform
-
-        valid_component_indicator = column_transform_info.transform_aux
-        num_components = valid_component_indicator.sum()
-
-        means = gm.means_.reshape((1, self._max_clusters))
-        stds = np.sqrt(gm.covariances_).reshape((1, self._max_clusters))
-        normalized_values = ((raw_column_data - means) / (4 * stds)
-                             )[:, valid_component_indicator]
-        component_probs = gm.predict_proba(
-            raw_column_data)[:, valid_component_indicator]
-
-        selected_component = np.zeros(len(raw_column_data), dtype='int')
-        for i in range(len(raw_column_data)):
-            component_porb_t = component_probs[i] + 1e-6
-            component_porb_t = component_porb_t / component_porb_t.sum()
-            selected_component[i] = np.random.choice(
-                np.arange(num_components), p=component_porb_t)
-
-        selected_normalized_value = normalized_values[np.arange(len(raw_column_data)), selected_component].reshape([-1, 1])
-        selected_normalized_value = np.clip(selected_normalized_value, -.99, .99)
-
-        selected_component_onehot = np.zeros_like(component_probs)
-        selected_component_onehot[np.arange(len(raw_column_data)),
-                                  selected_component] = 1
-        return [selected_normalized_value, selected_component_onehot]
-
-
-    def _merge_values(self, values, counts):
-        total_counts  = sum(counts)
-        total_value = 0
-        for i,v in enumerate(values):
-            total_value += v * counts[i]/total_counts
-        return (total_value, total_counts)
-
-    #### Privacy ####
-    def _transform_continuous_privacy(self, column_transform_info, raw_column_data):
+    def _cont_merging_maps(self, column_name, column_data, column_transform_info):
+        raw_column_data = column_data.values
         means_safe = []
         stds_safe = []
         
-        gm = column_transform_info.transform
-
-        means_unsafe = gm.means_.reshape((1, self.components_c))[0] #These are not sorted (causes problems as we want to merge neighbouring means)        
-        component_mapping = {}#i:[] for i in range(len(means_unsafe))}
-        
-        #stds_unsafe = np.sqrt(gm.covariances_).reshape((1, self.components_c)) #Not used, useful though
-        #print("stds_unsafe", stds_unsafe)
-        stds_tmp = [self.synthetic_std] * self.components_c #These are those we use
-
         valid_component_indicator = column_transform_info.transform_aux
         num_components = valid_component_indicator.sum()       
-        component_probs = gm.predict_proba(raw_column_data)[:, valid_component_indicator]
+        
+        gm = column_transform_info.transform
+        component_probs = gm.predict_proba(raw_column_data.reshape(-1, 1))[:, valid_component_indicator]
+
+        means_unsafe = gm.means_.reshape((1, self.components_c))[0] #These are not sorted (causes problems as we want to merge neighbouring means)              
+        #stds_unsafe = np.sqrt(gm.covariances_).reshape((1, self.components_c)) #Not used, useful though
+        stds_tmp = [self.synthetic_std] * self.components_c #These are those we use
+
         
         
         ###### Sample Counts ###### 
         #Assign samples to means and count them
         counts_per_component = {c:0 for c in range(self.components_c)}
-        selected_component = np.zeros(len(raw_column_data), dtype='int')
-        for i in range(len(raw_column_data)):
+        selected_component = np.zeros(len(column_data), dtype='int')
+        for i in range(len(column_data)):
             component_prob_t = component_probs[i] + 1e-6
             component_prob_t = component_prob_t / component_prob_t.sum()
             
@@ -371,7 +296,7 @@ class DataTransformerDP(object):
             if counts_per_component[i] >= self.l_threshold_c: #Mean `i` is safe, so we can add it; let's see whether there is something to merge next
                 tmp_means.append(means_unsafe[i])
                 tmp_counts.append(counts_per_component[i])
-                component_mapping[i] = len(tmp_means)-1 #Keep track of the mapping between the old means and the new ones
+                self.component_mapping[column_transform_info.column_name][i] = len(tmp_means)-1 #Keep track of the mapping between the old means and the new ones
            
                 if tmp_below_neighbours_idx != []: #There are means that couldn't be combined to make it above the threshold
                     #Merge the elements of `tmp_below_neighbours_idx` with whichever safe neighbour their are closer to
@@ -396,7 +321,7 @@ class DataTransformerDP(object):
                         tmp_means[merge_with_id] = tmp_mean
                         tmp_counts[merge_with_id] = tmp_count
 
-                        component_mapping[idx] = merge_with_id #Keep track of the mapping between the old means and the new ones
+                        self.component_mapping[column_transform_info.column_name][idx] = merge_with_id #Keep track of the mapping between the old means and the new ones
                 
             else :  # counts_per_component[i] < self.l_threshold_c:
                 tmp_below_neighbours_idx.append(i) #Keep pointer to unsafe means
@@ -406,15 +331,15 @@ class DataTransformerDP(object):
                 neighbour_counts =[counts_per_component[n] for n in tmp_below_neighbours_idx] 
                 (neighbour_mean, neighbour_count) = self._merge_values(neighbour_means, neighbour_counts)
                 
-                if neighbour_counts >= self.l_threshold_c: #We found a combination of "below" means that works
+                if neighbour_count >= self.l_threshold_c: #We found a combination of "below" means that works
                     tmp_means.append(neighbour_mean)
                     tmp_counts.append(neighbour_count)
                     
                     for idx in tmp_below_neighbours_idx: #Keep track of the mapping between the old means and the new ones
-                        component_mapping[idx] = len(tmp_means)-1 
+                        self.component_mapping[column_transform_info.column_name][idx] = len(tmp_means)-1 
                     tmp_below_neighbours_idx = [] #Flush list
                     
-                elif neighbour_counts < self.l_threshold_c and i == len(means_unsafe)-1: #If we are in the last element of the `means_unsafe`, merge with the last mean that was above the threshold
+                elif neighbour_count < self.l_threshold_c and i == len(means_unsafe)-1: #If we are in the last element of the `means_unsafe`, merge with the last mean that was above the threshold
                     assert last_merge == False #Should get here only once!
                     last_merge = True
                     
@@ -423,34 +348,148 @@ class DataTransformerDP(object):
                     tmp_counts[-1] = tmp_count
                     
                     for idx in tmp_below_neighbours_idx: #Keep track of the mapping between the old means and the new ones
-                        component_mapping[idx] = len(tmp_means)-1 
+                        self.component_mapping[column_transform_info.column_name][idx] = len(tmp_means)-1 
                     
                     tmp_below_neighbours_idx = [] #Flush list
                 
                 else:  #tmp_below_neighbours_idx doesn't have enough total_counts yet, keep going
                     pass
         
-        
-        self.means_safe = tmp_means
-        self.components_c_merged = len(self.means_safe)
-        self.stds_safe = [self.synthetic_std] * self.components_c_merged
         ###### Means Merging ###### 
         
-        ###### Sample Remapping ######
-        for r in range(len(raw_column_data)):
-            selected_component[r] = component_mapping[selected_component[r]]
-        ###### Sample Remapping ######            
+        means_safe = np.array(tmp_means)
+        components_c_merged = len(means_safe)
+        stds_safe = np.array([self.synthetic_std] * components_c_merged)
+        params = (components_c_merged, means_safe, stds_safe)
 
-        means = np.array(self.means_safe).reshape((1, self.components_c_merged))
-        stds = np.array(self.stds_safe).reshape((1, self.components_c_merged))
-        valid_component_indicator = [True] * self.components_c_merged
+        ###### Update the dimensions ######    
+        column_transform_info = ColumnTransformInfo(
+            column_name=column_name, 
+            column_type="continuous", 
+            transform=gm,
+            transform_aux=[True] * components_c_merged, #Privacy
+            output_info=[SpanInfo(1, 'tanh'), 
+            SpanInfo(components_c_merged, 'softmax')],
+            output_dimensions=1 + components_c_merged
+            )
+        ###### Update the dimensions ###### 
         
-        #Business as usual from now on
-        normalized_values = ((raw_column_data - means) / (4 * stds))[:, valid_component_indicator] #normalized distances from each mean
+        return (column_transform_info, params)
+
+    def fit(self, raw_data, discrete_columns=tuple()):
+        """Fit GMM for continuous columns and One hot encoder for discrete columns.
+        This step also counts the #columns in matrix data, and span information.
+        """
+  
+        self.output_info_list = []
+        self.output_dimensions = 0
+
+        if not isinstance(raw_data, pd.DataFrame):
+            raw_data = pd.DataFrame(raw_data)
+
+        self._column_raw_dtypes = raw_data.infer_objects().dtypes
+        self._column_transform_info_list = []
+  
+        
+        for column_name in raw_data.columns:
+            #raw_column_data = raw_data[column_name].values #CTGAN
+            column_data = raw_data[column_name]  #DPCTGAN
+
+
+            if column_name in discrete_columns:
+                column_transform_info = self._fit_discrete(column_name, column_data)
+            else:
+                if self.privacy_quantum: #### Privacy
+                    column_transform_info = self._fit_continuous_privacy(column_name, column_data) 
+                    
+                    # This stores the merged components and updates the dimensions but not the GMM! 
+                    # As a result, the dimensions are correct but the GMM retains the `old` premerged components. 
+                    # This becomes relevant in the fit-continous method, where the returned components need to be 
+                    # mapped to the new merged components.
+                    self.component_mapping[column_transform_info.column_name] = {}
+                    (column_transform_info, params) = self._cont_merging_maps(column_name, column_data, column_transform_info)
+                    (self.components_c_merged[column_name], self.means_safe[column_name], self.stds_safe[column_name]) = params
+                else:    
+                    column_transform_info = self._fit_continuous(column_name, column_data)
+
+            self.output_info_list.append(column_transform_info.output_info)
+            self.output_dimensions += column_transform_info.output_dimensions
+            self._column_transform_info_list.append(column_transform_info)
+          
+        #### Privacy ####
+        if self.privacy_quantum:		
+            self.value_maps_id = convert_names_to_ids(self, self.value_maps) # Move from "labels" to "column ids"
+        #### Privacy ####
+
+    def _transform_continuous(self, column_transform_info, raw_column_data):
+        gm = column_transform_info.transform
+
+        valid_component_indicator = column_transform_info.transform_aux
+        num_components = valid_component_indicator.sum()
+
+        component_probs = gm.predict_proba(raw_column_data)[:, valid_component_indicator]
+        
+        selected_component = np.zeros(len(raw_column_data), dtype='int')
+        for i in range(len(raw_column_data)):
+            component_prob_t = component_probs[i] + 1e-6
+            component_prob_t = component_prob_t / component_prob_t.sum()
+            selected_component[i] = np.random.choice(np.arange(num_components), p=component_prob_t)
+
+
+        means = gm.means_.reshape((1, self._max_clusters))
+        stds = np.sqrt(gm.covariances_).reshape((1, self._max_clusters))
+               
+        normalized_values = ((raw_column_data - means) / (4 * stds))[:, valid_component_indicator]
+        selected_normalized_value = normalized_values[np.arange(len(raw_column_data)), selected_component].reshape([-1, 1])
+        selected_normalized_value = np.clip(selected_normalized_value, -.99, .99)
+        
+        selected_component_onehot = np.zeros_like(component_probs) #Privacy
+        selected_component_onehot[np.arange(len(raw_column_data)), selected_component] = 1
+        return [selected_normalized_value, selected_component_onehot]
+
+    def _merge_values(self, values, counts):
+        total_counts  = sum(counts)
+        total_value = 0
+        for i,v in enumerate(values):
+            total_value += v * counts[i]/total_counts
+        return (total_value, total_counts)
+
+    #### Privacy ####
+    def _transform_continuous_privacy(self, column_transform_info, raw_column_data):
+        
+        ###### Working on the old/pre-merged components #####
+        gm = column_transform_info.transform
+        valid_component_indicator_premerged = gm.weights_ > 0 #That's an indicator for the components before merging.
+        component_probs = gm.predict_proba(raw_column_data)[:, valid_component_indicator_premerged]
+        num_components = valid_component_indicator_premerged.sum()
+        
+        selected_component = np.zeros(len(raw_column_data), dtype='int')
+        for i in range(len(raw_column_data)):
+            component_prob_t = component_probs[i] + 1e-6
+            component_prob_t = component_prob_t / component_prob_t.sum()
+            selected_component[i] = np.random.choice(np.arange(num_components), p=component_prob_t)
+        ###### Working on the old/pre-merged components #####
+        
+        ###### Sample Remapping to the new components ######
+        for r in range(len(raw_column_data)):
+            selected_component[r] = self.component_mapping[column_transform_info.column_name][selected_component[r]]
+        ###### Sample Remapping to the new components ######
+
+
+        ##### Working with the merged components from now on #####
+        means = self.means_safe[column_transform_info.column_name]
+        stds = self.stds_safe[column_transform_info.column_name]
+        components_c_merged = self.components_c_merged[column_transform_info.column_name]
+
+        means = means.reshape((1, components_c_merged))
+        stds = stds.reshape((1, components_c_merged))
+        valid_component_indicator = column_transform_info.transform_aux 
+        
+        normalized_values = ((raw_column_data - means) / (4 * stds))[:, valid_component_indicator]
         selected_normalized_value = normalized_values[np.arange(len(raw_column_data)), selected_component].reshape([-1, 1])
         selected_normalized_value = np.clip(selected_normalized_value, -.99, .99)
 
-        selected_component_onehot = np.zeros_like(component_probs)
+        selected_component_onehot = np.zeros((len(raw_column_data), components_c_merged))
         selected_component_onehot[np.arange(len(raw_column_data)),selected_component] = 1
         return [selected_normalized_value, selected_component_onehot]
         
@@ -470,7 +509,7 @@ class DataTransformerDP(object):
         for column_transform_info in self._column_transform_info_list:
             column_data = raw_data[[column_transform_info.column_name]].values
             if column_transform_info.column_type == "continuous":
-                if self.privacy_quantum: 
+                if self.privacy_quantum:
                     column_data_list += self._transform_continuous_privacy(column_transform_info, column_data)  #### Privacy
                 else:
                     column_data_list += self._transform_continuous(column_transform_info, column_data)
@@ -480,7 +519,8 @@ class DataTransformerDP(object):
                     column_transform_info, column_data)
 
         return np.concatenate(column_data_list, axis=1).astype(float)
-
+    
+    
     def _inverse_transform_continuous_privacy(self, column_transform_info, column_data, sigmas, st):
         #gm = column_transform_info.transform
         valid_component_indicator = column_transform_info.transform_aux
@@ -500,8 +540,11 @@ class DataTransformerDP(object):
             component_probs = np.ones((len(column_data), self._max_clusters)) * -100
         component_probs[:, valid_component_indicator] = selected_component_probs
 
+        ### Privacy ###
         means = self.means #gm.means_.reshape([-1])
         stds = self.stds #np.sqrt(gm.covariances_).reshape([-1])
+        ### Privacy ###
+        
         selected_component = np.argmax(component_probs, axis=1)
 
         std_t = stds[selected_component]

@@ -14,8 +14,7 @@ class DataSampler(object):
         n_discrete_columns = sum(
             [1 for column_info in output_info if is_discrete_column(column_info)])
 
-        self._discrete_column_matrix_st = np.zeros(
-            n_discrete_columns, dtype="int32")
+        self._discrete_column_matrix_st = np.zeros(n_discrete_columns, dtype="int32")
 
         # Store the row id for each category in each discrete column.
         # For example _rid_by_cat_cols[a][b] is a list of all rows with the
@@ -176,8 +175,7 @@ class DataSampler(object):
             if c in value_maps_id: #Discrete features
                 #Get the other values that are entagled with c,o
                 values, freqs = zip(*value_maps_id[c][o])
-            else: #Continuous features
-                values = (c,o)
+
                 
             sampling_pool = []
             for v in values: #The sampling pool contains all the samples with value either o or a value entangled with o
