@@ -222,7 +222,7 @@ class DataSampler(object):
             
             #Make sure that one of the columns in the list is 1.0. This is to assert that the pool sampling works as intended.
             st = self._discrete_column_matrix_st[c]
-            assert sum(tmp_sample[st:st+v_idx]) > 1.0
+            assert sum(tmp_sample[st:st+v_idx]) >= 1.0
 
             
             
