@@ -169,7 +169,10 @@ class DataSampler(object):
         # Get alternative opts
         for c, o in zip(col, opt):            
             #print("-----------\n", "c", c, "o", o)
-
+            
+            values = None
+            freqs = None
+            
             if c in value_maps_id: #Discrete features
                 #Get the other values that are entagled with c,o
                 values, freqs = zip(*value_maps_id[c][o])

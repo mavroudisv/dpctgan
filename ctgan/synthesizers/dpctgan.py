@@ -23,7 +23,6 @@ PRIVACY_QUANTUM   = True
 GRADIENT_PENALTY = False
 
 
-
 ALPHAS            = ([1.25, 1.5, 1.75, 2., 2.25, 2.5, 3., 3.5, 4., 4.5] + list(range(5, 64)) + [128, 256, 512])
 NOISE_MULTIPLIER  = 1.1
 MAX_GRAD_NORM     = 1.0
