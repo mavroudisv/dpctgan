@@ -41,11 +41,12 @@ class DataSampler(object):
                 self._rid_by_cat_cols.append(rid_by_cat)
                 st = ed
             elif len(column_info) == 2: #Discretized (tanh + softmax)
+                st += 1
                 self._discrete_column_matrix_st[discrete_ind] = st #Map feature-columns to their one hot encoding
                 discrete_ind += 1                
                
                 span_info = column_info[1]            
-                ed = st + sum([span_info.dim for span_info in column_info])   #(1 for tanh + N dim for the means)
+                ed = st + sum([span_info.dim for span_info in column_info]) - 1   #(1 for tanh + N dim for the means)
                
                 rid_by_cat = []
                 for j in range(span_info.dim):
@@ -92,7 +93,6 @@ class DataSampler(object):
                          
                 assert category_prob.shape == self._discrete_column_category_prob[current_id, :span_info.dim].shape
                 self._discrete_column_category_prob[current_id, :span_info.dim] = (category_prob)
-         
                 self._discrete_column_cond_st[current_id] = current_cond_st
                 self._discrete_column_n_category[current_id] = span_info.dim
                 current_cond_st += span_info.dim
@@ -100,6 +100,7 @@ class DataSampler(object):
                 st = ed
             elif len(column_info)==2:
                 span_info = column_info[1]
+                st += 1
                 ed = st + span_info.dim
                 category_freq = np.sum(data[:, st:ed], axis=0)
                 if log_frequency:
@@ -112,7 +113,7 @@ class DataSampler(object):
                 self._discrete_column_n_category[current_id] = span_info.dim
                 current_cond_st += span_info.dim
                 current_id += 1
-                st += sum([span_info.dim for span_info in column_info])
+                st = ed
             else:
                 raise Exception("Shouldn't happen #2!")
             
