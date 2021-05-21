@@ -113,7 +113,6 @@ def get_entanglements_per_feature(occurs, l_threshold):
         superposition = [(above_tuple[0], ratio_above), (below_tuple[0], ratio_below)]
         value_entanglement_map[above_tuple[0]] = superposition
         value_entanglement_map[below_tuple[0]] = superposition
-    
     return value_entanglement_map
 
 def get_entanglements(occurs, l_threshold):
@@ -267,8 +266,6 @@ class DataTransformerDP(object):
         #stds_unsafe = np.sqrt(gm.covariances_).reshape((1, self.components_c)) #Not used, useful though
         stds_tmp = [self.synthetic_std] * self.components_c #These are those we use
 
-        
-        
         ###### Sample Counts ###### 
         #Assign samples to means and count them
         counts_per_component = {c:0 for c in range(self.components_c)}
@@ -372,7 +369,7 @@ class DataTransformerDP(object):
             SpanInfo(components_c_merged, 'softmax')],
             output_dimensions=1 + components_c_merged
             )
-        ###### Update the dimensions ###### 
+        ###### Update the dimensions ######        
         
         return (column_transform_info, params)
 

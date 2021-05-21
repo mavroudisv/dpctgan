@@ -6,23 +6,18 @@ class DataSampler(object):
 
     def __init__(self, data, output_info, log_frequency):
         self._data = data
-
+        
+        '''
         def is_discrete_column(column_info):
-            if (len(column_info) == 1 and column_info[0].activation_fn == "softmax"): #Real discrete
-                return True
-            #elif (len(column_info) >= 1 and column_info[1].activation_fn == "softmax"): #Discretized
-            #    return True
-            else:
-                return False
-            #return (len(column_info) == 1 and column_info[0].activation_fn == "softmax")
-
-        n_discrete_columns = sum([1 for column_info in output_info if is_discrete_column(column_info)])
-
+            return (len(column_info) == 1
+                    and column_info[0].activation_fn == "softmax")
+        '''
+        n_discrete_columns = sum([1 for column_info in output_info])
         self._discrete_column_matrix_st = np.zeros(n_discrete_columns, dtype="int32")
 
         # Store the row id for each category in each discrete column.
         # For example _rid_by_cat_cols[a][b] is a list of all rows with the
-        # a-th discrete column equal value b.
+        # a-th discrete column (discrete_column_id) equal value b (index).
         self._rid_by_cat_cols = []
         #import sys
         #np.set_printoptions(threshold=sys.maxsize)
@@ -31,64 +26,100 @@ class DataSampler(object):
         discrete_ind = 0
         st = 0
         for column_info in output_info:
-            if is_discrete_column(column_info):
-                
-                
+            if len(column_info) == 1: #Discrete (softmax)
                 self._discrete_column_matrix_st[discrete_ind] = st #Map feature-columns to their one hot encoding
-                #print(discrete_ind, self._discrete_column_matrix_st[discrete_ind])
                 discrete_ind += 1                
-                
-                span_info = column_info[0]
+
+                span_info = column_info[0]                
                 ed = st + span_info.dim
-                
+
                 rid_by_cat = []
                 for j in range(span_info.dim):
-                    rid_by_cat.append(np.nonzero(data[:, st + j])[0])
-                    #idxes_0 = np.nonzero(data[:, st + j])
-                    #print(data[idxes_0][:,st+j])
+                    rid_by_cat.append(np.nonzero(data[:, st + j])[0]) #Get the indices of the rows where st+j (column_id) is non-zero, so that we can sample later
+                    
+
+                self._rid_by_cat_cols.append(rid_by_cat)
+                st = ed
+            elif len(column_info) == 2: #Discretized (tanh + softmax)
+                st += 1
+                self._discrete_column_matrix_st[discrete_ind] = st #Map feature-columns to their one hot encoding
+                discrete_ind += 1                
+               
+                span_info = column_info[1]            
+                ed = st + sum([span_info.dim for span_info in column_info]) - 1   #(1 for tanh + N dim for the means)
+               
+                rid_by_cat = []
+                for j in range(span_info.dim):
+                    rid_by_cat.append(np.nonzero(data[:, st + j])[0]) #Get the indices of the rows where st+j (column_id) is non-zero, so that we can sample later
 
                 self._rid_by_cat_cols.append(rid_by_cat)
                 st = ed
             else:
-                st += sum([span_info.dim for span_info in column_info])
+                raise Exception("Shouldn't happen #1!")
+
         assert st == data.shape[1]
 
         # Prepare an interval matrix for efficiently sample conditional vector
-        max_category = max(
-            [column_info[0].dim for column_info in output_info
-             if is_discrete_column(column_info)], default=0)
-
+        max_category = 0
+        for column_info in output_info:
+            if len(column_info)==1:
+                max_category = max(max_category, column_info[0].dim) #(softmax)
+            else:
+                max_category = max(max_category, column_info[1].dim) #(tanh, softmax)
+        
         self._discrete_column_cond_st = np.zeros(n_discrete_columns, dtype='int32')
         self._discrete_column_n_category = np.zeros(n_discrete_columns, dtype='int32')
         self._discrete_column_category_prob = np.zeros((n_discrete_columns, max_category))
         self._n_discrete_columns = n_discrete_columns
-        self._n_categories = sum(
-            [column_info[0].dim for column_info in output_info
-             if is_discrete_column(column_info)])
+        
+        self._n_categories = 0
+        for column_info in output_info:
+            if len(column_info)==1:
+                self._n_categories += column_info[0].dim #(softmax)
+            else:
+                self._n_categories += column_info[1].dim #(tanh, softmax)
 
         st = 0
         current_id = 0
         current_cond_st = 0
         for column_info in output_info:
-            if is_discrete_column(column_info):
+            if len(column_info)==1:
                 span_info = column_info[0]
                 ed = st + span_info.dim
                 category_freq = np.sum(data[:, st:ed], axis=0)
                 if log_frequency:
                     category_freq = np.log(category_freq + 1)
                 category_prob = category_freq / np.sum(category_freq)
-                self._discrete_column_category_prob[current_id, :span_info.dim] = (
-                    category_prob)
+                         
+                assert category_prob.shape == self._discrete_column_category_prob[current_id, :span_info.dim].shape
+                self._discrete_column_category_prob[current_id, :span_info.dim] = (category_prob)
+                self._discrete_column_cond_st[current_id] = current_cond_st
+                self._discrete_column_n_category[current_id] = span_info.dim
+                current_cond_st += span_info.dim
+                current_id += 1
+                st = ed
+            elif len(column_info)==2:
+                span_info = column_info[1]
+                st += 1
+                ed = st + span_info.dim
+                category_freq = np.sum(data[:, st:ed], axis=0)
+                if log_frequency:
+                    category_freq = np.log(category_freq + 1)
+                category_prob = category_freq / np.sum(category_freq)
+                
+                assert category_prob.shape == self._discrete_column_category_prob[current_id, :span_info.dim].shape
+                self._discrete_column_category_prob[current_id, :span_info.dim] = (category_prob)
                 self._discrete_column_cond_st[current_id] = current_cond_st
                 self._discrete_column_n_category[current_id] = span_info.dim
                 current_cond_st += span_info.dim
                 current_id += 1
                 st = ed
             else:
-                st += sum([span_info.dim for span_info in column_info])
-
+                raise Exception("Shouldn't happen #2!")
+            
     def _random_choice_prob_index(self, discrete_column_id):
         probs = self._discrete_column_category_prob[discrete_column_id]
+        print("probs", probs)
         r = np.expand_dims(np.random.rand(probs.shape[0]), axis=1)
         return (probs.cumsum(axis=1) > r).argmax(axis=1)
 
@@ -108,7 +139,6 @@ class DataSampler(object):
         if self._n_discrete_columns == 0:
             return None
 
-        batch = batch
         discrete_column_id = np.random.choice(np.arange(self._n_discrete_columns), batch)
         category_id_in_col = self._random_choice_prob_index(discrete_column_id)
 
@@ -169,33 +199,32 @@ class DataSampler(object):
         
         # Get alternative opts
         for c, o in zip(col, opt):            
-            #print("-----------\n", "c", c, "o", o)
+            print("-----------\n", "c", c, "o", o)
             
-            values = None
-            freqs = None
-            
+            values,freqs = None, None
             if c in value_maps_id: #Discrete features
                 #Get the other values that are entagled with c,o
-                #print("discrete")
+                print("discrete")
+                print(value_maps_id[c])
                 values, freqs = zip(*value_maps_id[c][o])
             else: #Continuous features
                 print("continuous")
-                values = (c,o)
+                values = [o]
+                freqs = [1.]
                 
+            print("values", values)
             sampling_pool = []
-            for v in values: #The sampling pool contains all the samples with value either o or a value entangled with o
-                sampling_pool.extend(self._rid_by_cat_cols[c][v]) # _rid_by_cat_cols[c][v] is a list of all rows with the c-th discrete column equal value v.
+            for v_idx in values: #The sampling pool contains all the samples with value either o or a value entangled with o
+                sampling_pool.extend(self._rid_by_cat_cols[c][v_idx]) # _rid_by_cat_cols[c][v] is a list of all rows with the c-th discrete column equal value v (index).
                 
             tmp_sample_idx = np.random.choice(sampling_pool) # Pick one sample from the pool of ids
             tmp_sample = self._data[tmp_sample_idx] #Get the sample corresponding to that id
+            print("tmp_sample", tmp_sample)
             
             #Make sure that one of the columns in the list is 1.0. This is to assert that the pool sampling works as intended.
             st = self._discrete_column_matrix_st[c]
-            found = False
-            for v in values:
-                if tmp_sample[st+v] == 1.0:
-                    found = True
-            assert(found)
+            assert sum(tmp_sample[st:st+v_idx]) >= 1.0
+
             
             
             #We now flip the value in column a based on the entanglement probability
