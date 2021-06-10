@@ -311,7 +311,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         st_c = 0
         for column_info in self._transformer.output_info_list:
             for span_info in column_info:
-                if len(column_info) != 1 or span_info.activation_fn != "softmax":
+                if span_info.activation_fn != "softmax": # len(column_info) != 1 or
                     # not discrete column
                     st += span_info.dim
                 else:
