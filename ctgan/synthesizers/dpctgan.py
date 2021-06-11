@@ -18,8 +18,8 @@ from opacus.utils.module_modification import convert_batchnorm_modules
 
 
 
-PRIVACY_DISCRIMINATOR = True
-PRIVACY_QUANTUM   = True
+PRIVACY_DISCRIMINATOR = False
+PRIVACY_QUANTUM   = False
 GRADIENT_PENALTY = False
 
 
@@ -213,7 +213,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
     def __init__(self, embedding_dim=128, generator_dim=(256, 256), discriminator_dim=(256, 256),
                  generator_lr=2e-4, generator_decay=1e-6, discriminator_lr=2e-4,
                  discriminator_decay=0, batch_size=500, discriminator_steps=1, log_frequency=True,
-                 verbose=False, epochs=300):
+                 verbose=True, epochs=300):
 
         assert batch_size % 2 == 0
 
@@ -226,7 +226,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         self._discriminator_lr = discriminator_lr
         self._discriminator_decay = discriminator_decay
 
-        self._batch_size = 1
+        self._batch_size = batch_size
         self._discriminator_steps = discriminator_steps
         self._log_frequency = log_frequency
         self._verbose = verbose
@@ -311,7 +311,7 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         st_c = 0
         for column_info in self._transformer.output_info_list:
             for span_info in column_info:
-                if len(column_info) != 1 or span_info.activation_fn != "softmax":
+                if span_info.activation_fn != "softmax": #len(column_info) != 1 or
                     # not discrete column
                     st += span_info.dim
                 else:
@@ -329,7 +329,8 @@ class dpCTGANSynthesizer(BaseSynthesizer):
         loss = torch.stack(loss, dim=1)
 
         return (loss * m).sum() / data.size()[0]
-
+        
+        
     def _validate_discrete_columns(self, train_data, discrete_columns):
         """Check whether ``discrete_columns`` exists in ``train_data``.
 

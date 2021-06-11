@@ -119,7 +119,6 @@ class DataSampler(object):
             
     def _random_choice_prob_index(self, discrete_column_id):
         probs = self._discrete_column_category_prob[discrete_column_id]
-        print("probs", probs)
         r = np.expand_dims(np.random.rand(probs.shape[0]), axis=1)
         return (probs.cumsum(axis=1) > r).argmax(axis=1)
 
@@ -199,34 +198,30 @@ class DataSampler(object):
         
         # Get alternative opts
         for c, o in zip(col, opt):            
-            print("-----------\n", "c", c, "o", o)
+            #print("-----------\n", "c", c, "o", o)
             
             values,freqs = None, None
-            if c in value_maps_id: #Discrete features
+            if c in value_maps_id:
                 #Get the other values that are entagled with c,o
-                print("discrete")
-                print(value_maps_id[c])
+                #print("discrete")
+                #print(value_maps_id[c])
                 values, freqs = zip(*value_maps_id[c][o])
-            else: #Continuous features
-                print("continuous")
-                values = [o]
-                freqs = [1.]
+            else:
+                assert false, "Column " + str(c) + " not in value_maps_id"
                 
-            print("values", values)
+            #print("values", values)
             sampling_pool = []
             for v_idx in values: #The sampling pool contains all the samples with value either o or a value entangled with o
                 sampling_pool.extend(self._rid_by_cat_cols[c][v_idx]) # _rid_by_cat_cols[c][v] is a list of all rows with the c-th discrete column equal value v (index).
                 
             tmp_sample_idx = np.random.choice(sampling_pool) # Pick one sample from the pool of ids
             tmp_sample = self._data[tmp_sample_idx] #Get the sample corresponding to that id
-            print("tmp_sample", tmp_sample)
+            #print("tmp_sample", tmp_sample)
             
             #Make sure that one of the columns in the list is 1.0. This is to assert that the pool sampling works as intended.
             st = self._discrete_column_matrix_st[c]
-            assert sum(tmp_sample[st:st+v_idx]) >= 1.0
+            assert sum([tmp_sample[st+v_ind] for v_ind in values]) >= 1.0, "tmp_sample with those was "+str([tmp_sample[st+v_ind] for v_ind in values])
 
-            
-            
             #We now flip the value in column a based on the entanglement probability
             #Switch all the opts under the col to 0.0
             #and then switch one of them to 1.0

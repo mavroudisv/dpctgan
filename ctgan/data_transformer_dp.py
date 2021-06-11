@@ -71,63 +71,95 @@ def get_occurences_counts_per_feature(data_feature, add_noise=False, noise_d_mea
             counts_feature[key] = row + random.normal(loc=noise_d_mean, scale=noise_d_std) #Random values here for now, just making sure we won't go into the negatives
     return counts_feature
 
+def get_entanglements_per_feature_dummy(occurs, l_threshold):
+    values_all = []
+    
+    for label, count in occurs.iteritems():
+            values_all.append((label, count))
+
+
+    indices_entanglement_map = {} # Map of the superpositions
+    for index, _ in enumerate(values_all):
+        tuple = values_all[index] #(index, count)
+        position = [(index, 1)]  #value, probability
+        indices_entanglement_map[index] = position
+    
+    return indices_entanglement_map
  
 def get_entanglements_per_feature(occurs, l_threshold):
-    values_above = []
-    values_below = []
+    indices_above = []
+    indices_below = []
     
     #Get values below L
+    idx_counter = 0
+    idx_counters = {}
     for label, count in occurs.iteritems():
+        idx_counters[label] = idx_counter
+        idx_counter += 1
         #print(label, count)
         if count > l_threshold:
-            values_above.append((label, count))
+            indices_above.append((idx_counters[label], count))
         else:
-            values_below.append((label, count))
-
+            indices_below.append((idx_counters[label], count))
     
     ## Sort based on occurences
-    values_below = sorted(values_below, key=lambda tup: tup[1], reverse=True)
-    values_above = sorted(values_above, key=lambda tup: tup[1], reverse=True)
+    indices_below = sorted(indices_below, key=lambda tup: tup[1], reverse=True)
+    indices_above = sorted(indices_above, key=lambda tup: tup[1], reverse=True)
     
-    value_entanglement_map = {} # Map of the superpositions
-    for index, _ in enumerate(values_above):
-        above_tuple = values_above[index] #(value, count)
-        position = [(above_tuple[0], 1)]  #value, probability
-        value_entanglement_map[above_tuple[0]] = position
+    indices_entanglement_map = {} # Map of the superpositions
+    for index, _ in enumerate(indices_above):
+        above_tuple = indices_above[index] #(value, count)
+        idx_counter = idx_counters[above_tuple[0]]
+        position = [(idx_counter, 1)]  #value, probability
+        indices_entanglement_map[idx_counter] = position
     
-    assert len(values_above) > 0
-    assert len(values_above) >= len(values_below) #Needed because of the merging algorithm used below
+    assert len(indices_above) > 0
+    assert len(indices_above) >= len(indices_below) #Needed because of the merging algorithm used below
 
     # MERGING ALGORITHM #
     # Entangle some of the "above" values with some values with occurences "below" the threshold    
     ## Todo: This insanely simple "algorithm" assumes that we have more values above the threshold than below.
     ## Come up with a nice, generic algorithm for deciding what to merge
-    for index, _ in enumerate(values_below):
-        above_tuple = values_above[index]
-        below_tuple = values_below[index]
+    for index, _ in enumerate(indices_below):
+        above_tuple = indices_above[index]
+        below_tuple = indices_below[index]
         
         count_sum = above_tuple[1] + below_tuple[1]
         ratio_above = above_tuple[1] / count_sum
         ratio_below = below_tuple[1] / count_sum
         
         superposition = [(above_tuple[0], ratio_above), (below_tuple[0], ratio_below)]
-        value_entanglement_map[above_tuple[0]] = superposition
-        value_entanglement_map[below_tuple[0]] = superposition
-    return value_entanglement_map
+        indices_entanglement_map[above_tuple[0]] = superposition
+        indices_entanglement_map[below_tuple[0]] = superposition
+    return indices_entanglement_map
 
 def get_entanglements(occurs, l_threshold):
     value_maps = {}
     for feature in occurs.keys():
         value_maps[feature] = get_entanglements_per_feature(occurs[feature], l_threshold)
     return value_maps
-    
+   
 def convert_names_to_ids(transf, value_maps):
+    value_maps_id = {}
+    column_id = 0
+    for column_transform_info in transf._column_transform_info_list:
+        value_maps_id[column_id] = value_maps[column_transform_info.column_name]
+        #if column_transform_info.column_type == "discrete":
+        #    discrete_counter += 1
+        column_id += 1           
+    return value_maps_id
+
+'''
+def convert_names_to_ids_obsolete(transf, value_maps):
     value_maps_id = {}
     for name in value_maps.keys():
         info = transf.convert_column_name_to_id(name)
         id = info['discrete_column_id'] #self._data_sampler.sample_condvec uses `discrete_column_id` 
         value_maps_id[id] = value_maps[name]
+              
+                
     return value_maps_id
+'''
 #### Privacy #### 
 
 class DataTransformerDP(object):
@@ -136,6 +168,8 @@ class DataTransformerDP(object):
     Model continuous columns with a BayesianGMM and normalized to a scalar [0, 1] and a vector.
     Discrete columns are encoded using a scikit-learn OneHotEncoder.
     """
+
+
 
     def __init__(self, privacy_quantum,
                 noisy_occurences_d, 
@@ -215,7 +249,12 @@ class DataTransformerDP(object):
         assert raw_column_data.shape[0] > self.l_threshold_c #The total number of samples is less than the privacy threshold! Consider needing less privacy or gather more data.
         gm = GaussianMixture(self.components_c)
         gm.fit(raw_column_data.reshape(-1, 1))
-        
+
+        #### Privacy ####        
+        if self.privacy_quantum:
+            self.occurences[column_name] = get_occurences_counts_per_feature(column_data, self.noisy_occurences_d, self.noise_d_mean, self.noise_d_std) # Count occurences
+            self.value_maps[column_name] = get_entanglements_per_feature_dummy(self.occurences[column_name], self.l_threshold_d)   
+        #### Privacy ####
            
         valid_component_indicator = gm.weights_ > 0
         num_components = valid_component_indicator.sum()
@@ -225,8 +264,7 @@ class DataTransformerDP(object):
             column_type="continuous", 
             transform=gm,
             transform_aux=valid_component_indicator,
-            output_info=[SpanInfo(1, 'tanh'), 
-            SpanInfo(num_components, 'softmax')],
+            output_info=[SpanInfo(1, 'tanh'), SpanInfo(num_components, 'softmax')],
             output_dimensions=1 + num_components
             )
 
@@ -531,7 +569,7 @@ class DataTransformerDP(object):
 
         selected_normalized_value = np.clip(selected_normalized_value, -1, 1)
         
-        if privacy_quantum:
+        if self.privacy_quantum:
             component_probs = np.ones((len(column_data), self.components_c)) * -100
         else:
             component_probs = np.ones((len(column_data), self._max_clusters)) * -100
@@ -563,7 +601,7 @@ class DataTransformerDP(object):
 
         selected_normalized_value = np.clip(selected_normalized_value, -1, 1)
         
-        if privacy_quantum:
+        if self.privacy_quantum:
             component_probs = np.ones((len(column_data), self.components_c)) * -100
         else:
             component_probs = np.ones((len(column_data), self._max_clusters)) * -100
@@ -616,20 +654,26 @@ class DataTransformerDP(object):
 
         return recovered_data
 
+    '''
     def convert_column_name_to_id(self, column_name):
         discrete_counter = 0
         column_id = 0
         for column_transform_info in self._column_transform_info_list:
+            #print(column_transform_info.column_name)
             if column_transform_info.column_name == column_name:
                 break
-            if column_transform_info.column_type == "discrete":
-                discrete_counter += 1
+            
+            discrete_counter += 1
+            #if column_transform_info.column_type != "discrete":
+            #    column_id += 1    
             column_id += 1    
         return {
             "discrete_column_id": discrete_counter,
             "column_id": column_id,
-        }
+        }                 
+    '''                                                                  
 
+    '''
     def convert_column_name_value_to_id(self, column_name, value):
         discrete_counter = 0
         column_id = 0
@@ -644,3 +688,4 @@ class DataTransformerDP(object):
             "column_id": column_id,
             "value_id": np.argmax(column_transform_info.transform.transform(np.array([value]))[0])
         }
+    '''
