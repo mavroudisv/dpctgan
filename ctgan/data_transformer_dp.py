@@ -421,7 +421,11 @@ class DataTransformerDP(object):
 
         if not isinstance(raw_data, pd.DataFrame):
             raw_data = pd.DataFrame(raw_data)
+            self.dataframe = False
+        else:
+            self.dataframe = True
 
+            
         self._column_raw_dtypes = raw_data.infer_objects().dtypes
         self._column_transform_info_list = []
   
