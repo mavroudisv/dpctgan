@@ -606,7 +606,7 @@ class DataTransformerDP(object):
         selected_normalized_value = np.clip(selected_normalized_value, -1, 1)
         
         if self.privacy_quantum:
-            component_probs = np.ones((len(column_data), self.components_c)) * -100
+            component_probs = np.ones((len(column_data), self.components_c_merged[column_transform_info.column_name])) * -100
         else:
             component_probs = np.ones((len(column_data), self._max_clusters)) * -100
         component_probs[:, valid_component_indicator] = selected_component_probs
