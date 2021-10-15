@@ -7,6 +7,8 @@ from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 
 ##### Privacy ######
 from numpy import random
+import configmod 
+TRANFORMATION_FILE = configmod.EVALPARAMETERS['TRANSFORM_FILEPATH']
 
 def _set_parameters(self, params):
     ##### Sorting the parameters based on the means ######
@@ -149,6 +151,11 @@ def convert_names_to_ids(transf, value_maps):
         column_id += 1           
     return value_maps_id
 
+def write_transform_info(feature_name, type, count, entanglements):
+    with open (TRANFORMATION_FILE, 'a') as f:
+        f.write (feature_name + "," + type  + "," + str(count)  + "," + str(entanglements) + "\n")
+
+
 '''
 def convert_names_to_ids_obsolete(transf, value_maps):
     value_maps_id = {}
@@ -254,6 +261,7 @@ class DataTransformerDP(object):
         if self.privacy_quantum:
             self.occurences[column_name] = get_occurences_counts_per_feature(column_data, self.noisy_occurences_d, self.noise_d_mean, self.noise_d_std) # Count occurences
             self.value_maps[column_name] = get_entanglements_per_feature_dummy(self.occurences[column_name], self.l_threshold_d)   
+            write_transform_info(column_name, "C", self.components_c, "-")
         #### Privacy ####
            
         valid_component_indicator = gm.weights_ > 0
@@ -278,6 +286,7 @@ class DataTransformerDP(object):
         if self.privacy_quantum:
             self.occurences[column_name] = get_occurences_counts_per_feature(column_data, self.noisy_occurences_d, self.noise_d_mean, self.noise_d_std) # Count occurences
             self.value_maps[column_name] = get_entanglements_per_feature(self.occurences[column_name], self.l_threshold_d) # Decide on entanglements       
+            write_transform_info(column_name, "D", len(self.occurences[column_name]), self.value_maps[column_name])
         #### Privacy ####
 
         return ColumnTransformInfo(
