@@ -8,15 +8,16 @@ def max_sampling_prob(bins):
     #Sampling prob for each value
     max_prob = 0
     for bin in true_bins:
-        tmp_prob = float(1)/(float(len(bin)*len(true_bins)))
-        max_prob = max(tmp_prob,max_prob)
+        if sum(bin)!=0:                
+            tmp_prob = float(1)/(float(sum(bin)*len(true_bins)))
+            max_prob = max(tmp_prob,max_prob)
     return max_prob
 
 
 def checkConstraint(bins, threshold):
     for bin in bins:
         tmp = sum(bin)
-        if tmp < threshold and tmp!=0:
+        if tmp < threshold and len(bin)!=0:
             return False
     return True
 
