@@ -43,7 +43,7 @@ if __name__ == "__main__":
     num_bins = 8
     k = 4
 
-    counts = list(range(num_counts))
+    counts = list(range(1,num_counts+1))
     bins = [[] for i in range(num_bins)]
 
     binCounts(bins, counts, 0, k);
